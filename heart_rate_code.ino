@@ -14,8 +14,10 @@ bool sensorActive = true;
 // Buffer untuk menyimpan data IR dan SpO2
 #define BUFFER_SIZE 50
 
-long irBuffer[BUFFER_SIZE];
-long irBufferSpO2[BUFFER_SIZE];
+long redBuffer[BUFFER_SIZE];
+
+long irBuffer[BUFFER_SIZE];     // untuk spO2
+long irBufferSpO2[BUFFER_SIZE]; // untuk spO2
 int bufferIndex = 0;
 bool bufferReady = false;
 
@@ -36,17 +38,17 @@ bool bpmReady = false;
 float bpmAvg = 0;
 
 // ===== SMOOTHING =====
-long irBuffer[5];
+long irBufferSmooth[5];
 int irIndex = 0;
 
 long smoothIR(long value)
 {
-  irBuffer[irIndex++] = value;
+  irBufferSmooth[irIndex++] = value;
   irIndex %= 5;
 
   long sum = 0;
   for (int i = 0; i < 5; i++)
-    sum += irBuffer[i];
+    sum += irBufferSmooth[i];
 
   return sum / 5;
 }
@@ -181,17 +183,16 @@ void callback(char *topic, byte *payload, unsigned int length)
 }
 
 // CALCULATE SPO2
-float calculateSpO2
+float calculateSpO2()
 {
-  long redAC = 0;
-  , irAC = 0;
+  long redAC = 0, irAC = 0;
   long redDC = 0, irDC = 0;
 
   // hitung rata-rata DC
   for (int i = 0; i < BUFFER_SIZE; i++)
   {
     redDC += redBuffer[i];
-    irDC += irBuffer[i];
+    irDC += irBufferSpO2[i];
   }
 
   redDC /= BUFFER_SIZE;
@@ -240,7 +241,7 @@ void taskSensor(void *pvParameters)
     long ir = sensor.getIR();
 
     redBuffer[bufferIndex] = red;
-    irBuffer[bufferIndex] = ir;
+    irBufferSpO2[bufferIndex] = ir;
 
     bufferIndex++;
     if (bufferIndex >= BUFFER_SIZE)
@@ -262,6 +263,12 @@ void taskSensor(void *pvParameters)
 
     if (beat)
     {
+      float spo2 = 0;
+      if (bufferReady)
+      {
+        spo2 = calculateSpO2();
+      }
+
       float bpmValue = 60000.0 / (millis() - lastBeatTime);
       lastBeatTime = millis();
 
@@ -274,12 +281,18 @@ void taskSensor(void *pvParameters)
         status = "high";
 
       // ===== JSON FULL =====
-      char payload[128];
+      char payload[160];
       sprintf(payload,
-              "{\"bpm\":%.2f,\"ir\":%ld,\"status\":\"%s\",\"finger\":true}",
-              bpmValue, ir, status.c_str());
+              "{\"bpm\":%.2f,\"spo2\":%.2f,\"ir\":%ld,\"status\":\"%s\",\"finger\":true}",
+              bpmValue, spo2, ir, status.c_str());
 
       client.publish("heart/data", payload);
+
+      // ALERT SPO2
+      if (spo2 < 92 && spo2 > 0)
+      {
+        client.publish("heart/alert", "{\"type\":\"spo2_low\"}");
+      }
 
       // ALERT
       if (status != "normal")
