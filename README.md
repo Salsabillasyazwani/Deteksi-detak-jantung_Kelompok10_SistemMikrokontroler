@@ -1,4 +1,9 @@
-﻿# Kelompok-10_SistemMikrokontroler_-TIF-RP23CNSA
+# Kelompok 10 - Sistem Mikrokontroler (TIF-RP23CNSA)
 
-Anggota:
-Nama: Raffly NIM: 23552011278
+## Anggota
+
+- **Raffly**  
+  NIM: 23552011278  
+
+- **Salsa Billa Syazwani**  
+  NIM: (isi NIM jika ada)
