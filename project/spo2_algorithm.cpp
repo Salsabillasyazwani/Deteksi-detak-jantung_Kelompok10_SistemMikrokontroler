@@ -1,7 +1,7 @@
 #include "spo2_algorithm.h"
 #include <math.h>
 
-#define FS 25
+#define FS 100
 
 // Fungsi untuk menghitung SpO2 dan detak jantung
 void maxim_heart_rate_and_oxygen_saturation(
@@ -24,16 +24,19 @@ void maxim_heart_rate_and_oxygen_saturation(
   ir_mean /= buffer_length;
   red_mean /= buffer_length;
 
+  // RMS (Root Mean Square) untuk sinyal AC
   float ir_ac = 0, red_ac = 0;
 
   for (int i = 0; i < buffer_length; i++)
   {
-    ir_ac += fabs(ir_buffer[i] - ir_mean);
-    red_ac += fabs(red_buffer[i] - red_mean);
+    float ir_diff = ir_buffer[i] - ir_mean;
+    float red_diff = red_buffer[i] - red_mean;
+    ir_ac += ir_diff * ir_diff;
+    red_ac += red_diff * red_diff;
   }
 
-  ir_ac /= buffer_length;
-  red_ac /= buffer_length;
+  ir_ac = sqrt(ir_ac / buffer_length);   // RMS IR
+  red_ac = sqrt(red_ac / buffer_length); // RMS Red
 
   if (ir_ac == 0 || red_mean == 0)
   {
@@ -46,7 +49,7 @@ void maxim_heart_rate_and_oxygen_saturation(
 
   float ratio = (red_ac / red_mean) / (ir_ac / ir_mean);
 
-  float spo2_calc = 104 - 17 * ratio;
+  float spo2_calc = 110 - 20 * ratio;
 
   if (spo2_calc > 100)
     spo2_calc = 100;
@@ -67,6 +70,11 @@ void maxim_heart_rate_and_oxygen_saturation(
         ir_buffer[i] > ir_buffer[i + 1] &&
         ir_buffer[i] > ir_mean)
     {
+      if (last_peak != -1 && (i - last_peak) < 10)
+      {
+        // Skip if the peak is too close to the last one
+        continue;
+      }
       if (last_peak != -1)
       {
         interval_sum += (i - last_peak);

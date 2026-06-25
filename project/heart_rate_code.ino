@@ -4,98 +4,63 @@
 #include "MAX30105.h"
 #include "spo2_algorithm.h"
 
-MAX30105 sensor;
-
-bool sensorActive = true;
-
-// Threeshold abnormal detak jantung
-#define BPM_LOW 50
-#define BPM_HIGH 150
-
-// Buffer untuk menyimpan data IR dan SpO2
 #define BUFFER_SIZE 100
 
-long redBuffer[BUFFER_SIZE];
-
-long irBuffer[BUFFER_SIZE];     // untuk spO2
-long irBufferSpO2[BUFFER_SIZE]; // untuk spO2
-int bufferIndex = 0;
-bool bufferReady = false;
+MAX30105 sensor;
 
 // INISIALISASI WIFI
 const char *ssid = "Los";
 const char *password = "123456780";
 const char *mqtt_server = "192.168.137.1"; // Ganti dengan alamat broker/ip
 
+// MQTT
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-unsigned long lastBeatTime = 0;
-float bpm = 0;
-#define RATE_SIZE 4
-float rates[RATE_SIZE];
-byte rateSpot = 0;
-bool bpmReady = false;
-float bpmAvg = 0;
+// CONTROL
+bool sensorActive = true;
 
-// ===== SMOOTHING =====
-long irBufferSmooth[5];
-int irIndex = 0;
+// BUFFER
+uint32_t irBuffer[BUFFER_SIZE];
+uint32_t redBuffer[BUFFER_SIZE];
 
-long smoothIR(long value)
+int bufferIndex = 0;
+bool bufferReady = false;
+
+// HASIL
+int32_t spo2;
+int8_t spo2_valid;
+int32_t heartRate;
+int8_t hr_valid;
+
+// CALLBACK FUNCTION UNTUK MQTT
+void callback(char *topic, byte *payload, unsigned int length)
 {
-  irBufferSmooth[irIndex++] = value;
-  irIndex %= 5;
+  String msg = "";
 
-  long sum = 0;
-  for (int i = 0; i < 5; i++)
-    sum += irBufferSmooth[i];
-
-  return sum / 5;
-}
-
-// ===== PEAK DETECTION =====
-bool detectPeak(long irValue)
-{
-  static long prev = 0;
-  static bool rising = false;
-  static long threshold = 0;
-  static unsigned long lastBeat = 0;
-  static int validPeak = 0;
-
-  threshold = (threshold * 0.9) + (irValue * 0.1);
-
-  if (irValue > threshold && irValue > prev && !rising)
+  for (int i = 0; i < length; i++)
   {
-    rising = true;
+    msg += (char)payload[i];
   }
 
-  if (rising && irValue < prev)
+  Serial.print("Pesan masuk [");
+  Serial.print(topic);
+  Serial.print("]: ");
+  Serial.println(msg);
+
+  if (String(topic) == "sensor/control")
   {
-    rising = false;
-
-    long peakHeight = prev - threshold;
-
-    // filter lebih ketat
-    if (millis() - lastBeat > 600 && peakHeight > 20)
+    if (msg == "START")
     {
-      validPeak++;
-
-      if (validPeak >= 1)
-      {
-        lastBeat = millis();
-        validPeak = 0;
-        return true;
-      }
+      sensorActive = true;
+      Serial.println("Sensor AKTIF");
     }
-    else
+    else if (msg == "STOP")
     {
-      validPeak = 0;
+      sensorActive = false;
+      Serial.println("Sensor NONAKTIF");
     }
   }
-
-  prev = irValue;
-  return false;
 }
 
 // ==== MQTT CONNECT ====
@@ -118,6 +83,22 @@ void reconnect()
       delay(2000);
     }
   }
+}
+
+// ===== SMOOTHING =====
+long irBufferSmooth[5];
+int irIndex = 0;
+
+long smoothIR(long value)
+{
+  irBufferSmooth[irIndex++] = value;
+  irIndex %= 5;
+
+  long sum = 0;
+  for (int i = 0; i < 5; i++)
+    sum += irBufferSmooth[i];
+
+  return sum / 5;
 }
 
 // === MQTT DEBUG ===
@@ -153,81 +134,22 @@ void debugWiFi()
   Serial.println("================================");
 }
 
-// CALLBACK FUNCTION FOR MQTT
-void callback(char *topic, byte *payload, unsigned int length)
-{
-  String msg = "";
-
-  for (int i = 0; i < length; i++)
-  {
-    msg += (char)payload[i];
-  }
-
-  Serial.print("Pesan masuk [");
-  Serial.print(topic);
-  Serial.print("]: ");
-  Serial.println(msg);
-
-  if (String(topic) == "sensor/control")
-  {
-    if (msg == "START")
-    {
-      sensorActive = true;
-      Serial.println("Sensor AKTIF");
-    }
-    else if (msg == "STOP")
-    {
-      sensorActive = false;
-      Serial.println("Sensor NONAKTIF");
-    }
-  }
-}
-
-// CALCULATE SPO2
-float calculateSpO2()
-{
-  long redAC = 0, irAC = 0;
-  long redDC = 0, irDC = 0;
-
-  // hitung rata-rata DC
-  for (int i = 0; i < BUFFER_SIZE; i++)
-  {
-    redDC += redBuffer[i];
-    irDC += irBufferSpO2[i];
-  }
-
-  redDC /= BUFFER_SIZE;
-  irDC /= BUFFER_SIZE;
-
-  // hitung rata-rata AC
-  for (int i = 0; i < BUFFER_SIZE; i++)
-  {
-    redAC += abs(redBuffer[i] - redDC);
-    irAC += abs(irBuffer[i] - irDC);
-  }
-
-  redAC /= BUFFER_SIZE;
-  irAC /= BUFFER_SIZE;
-
-  if (irAC == 0 || redDC == 0 || irDC == 0)
-    return 0; // menghindari pembagian dengan nol
-
-  float ratio = ((float)redAC / redDC) / ((float)irAC / irDC);
-
-  float spo2 = 110 - (25 * ratio); // Rumus perkiraan SpO2
-
-  // Pastikan nilai SpO2 berada dalam rentang 0-100%
-  if (spo2 > 100)
-    spo2 = 100;
-  else if (spo2 < 0)
-    spo2 = 0;
-  return spo2;
-}
-
 // RTOS TASKS
 // === TASK 1 SENSOR ===
 void taskSensor(void *pvParameters)
 {
+  static int loopCounter = 0;
+  loopCounter++;
+  if (loopCounter < 25)
+  {
+    vTaskDelay(40 / portTICK_PERIOD_MS);
+    continue;
+  }
+  loopCounter = 0;
+
+  static int32_t lastSpo2 = -1;
+  static int32_t lastHeartRate = -1;
+
   while (1)
   {
     // STOP TOTAL
@@ -238,73 +160,78 @@ void taskSensor(void *pvParameters)
       continue;
     }
 
-    long red = sensor.getRed();
-    long ir = sensor.getIR();
+    // TUNGGU DATA READY
+    if (!sensor.available())
+    {
+      vTaskDelay(5 / portTICK_PERIOD_MS);
+      continue;
+    }
 
+    uint32_t ir = sensor.getFIFOIR();
+    uint32_t red = sensor.getFIFORed();
+    sensor.nextSample();
+
+    // DETEKSI JARI
+    if (ir < 50000)
+    {
+      client.publish("heart/data", "{\"finger\":false}");
+      bufferIndex = 0;
+      bufferReady = false;
+      vTaskDelay(50 / portTICK_PERIOD_MS);
+      continue;
+    }
+
+    irBuffer[bufferIndex] = ir;
     redBuffer[bufferIndex] = red;
-    irBufferSpO2[bufferIndex] = ir;
 
     bufferIndex++;
+
     if (bufferIndex >= BUFFER_SIZE)
     {
       bufferIndex = 0;
       bufferReady = true;
     }
 
-    // tidak ada jari
-    if (ir < 20000)
+    if (!bufferReady)
     {
-      client.publish("heart/data", "{\"finger\":false}");
-      vTaskDelay(100 / portTICK_PERIOD_MS);
+      vTaskDelay(10 / portTICK_PERIOD_MS);
       continue;
     }
 
-    long filtered = smoothIR(ir);
-    bool beat = detectPeak(filtered);
+    maxim_heart_rate_and_oxygen_saturation(
+        irBuffer,
+        BUFFER_SIZE,
+        redBuffer,
+        &spo2,
+        &spo2_valid,
+        &heartRate,
+        &hr_valid);
 
-    if (beat)
-    {
-      float spo2 = 0;
-      if (bufferReady)
-      {
-        spo2 = calculateSpO2();
-      }
+    // BUANG DATA YANG TIDAK VALID
+    if (spo2 < 70 || spo2 > 100 || !spo2_valid)
+      spo2 = lastSpo2;
+    else
+      lastSpo2 = spo2;
 
-      float bpmValue = 60000.0 / (millis() - lastBeatTime);
-      lastBeatTime = millis();
+    if (heartRate < 40 || heartRate > 180 || !hr_valid)
+      heartRate = lastHeartRate;
+    else
+      lastHeartRate = heartRate;
 
-      // ===== DETEKSI ABNORMAL =====
-      String status = "normal";
+    char payload[150];
 
-      if (bpmValue < BPM_LOW)
-        status = "low";
-      else if (bpmValue > BPM_HIGH)
-        status = "high";
+    sprintf(payload,
+            "{\"bpm\":%d,\"spo2\":%d,\"valid_spo2\":%d,\"valid_hr\":%d,\"finger\":true}",
+            heartRate,
+            spo2,
+            spo2_valid,
+            hr_valid);
 
-      // ===== JSON FULL =====
-      char payload[160];
-      sprintf(payload,
-              "{\"bpm\":%.2f,\"spo2\":%.2f,\"ir\":%ld,\"status\":\"%s\",\"finger\":true}",
-              bpmValue, spo2, ir, status.c_str());
-
+    if (client.connected())
       client.publish("heart/data", payload);
 
-      // ALERT SPO2
-      if (spo2 < 92 && spo2 > 0)
-      {
-        client.publish("heart/alert", "{\"type\":\"spo2_low\"}");
-      }
-
-      // ALERT
-      if (status != "normal")
-      {
-        client.publish("heart/alert", payload);
-      }
-
-      Serial.println(payload);
-    }
-
-    vTaskDelay(50 / portTICK_PERIOD_MS);
+    Serial.println(payload);
+    vTaskDelay(40 / portTICK_PERIOD_MS);
   }
 }
 
@@ -326,17 +253,24 @@ void setup()
 {
   Serial.begin(115200);
   Wire.begin(18, 19);
-  Serial.println();
+
   Serial.println("Inisialisasi sensor dan MQTT...");
 
   if (!sensor.begin(Wire))
   {
-    Serial.println("Sensor error");
+    Serial.println("Sensor MAX30102 tidak ditemukan. Periksa koneksi.");
     while (1)
-      delay(1000);
+      ;
   }
 
-  sensor.setup(60, 4, 2, 100, 411, 4096);
+  sensor.setup(
+      60,   // brightness
+      4,    // sample avg
+      2,    // LED mode
+      100,  // sample rate
+      411,  // pulse width
+      16384 // ADC range
+  );        // Konfigurasi sensor
   sensor.setPulseAmplitudeRed(0x0F);
   sensor.setPulseAmplitudeIR(0x2F);
 
@@ -348,12 +282,12 @@ void setup()
     Serial.print(".");
   }
   Serial.println();
-  Serial.println("WiFi terhubung");
-  Serial.print("IP: ");
-  Serial.println(WiFi.localIP());
+  debugWiFi();
+  debugMQTT();
 
-  client.setCallback(callback);
   client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);
+
   reconnect();
 
   xTaskCreatePinnedToCore(taskSensor, "TaskSensor", 4096, NULL, 1, NULL, 1);
@@ -362,13 +296,4 @@ void setup()
   Serial.println("Setup selesai. MQTT dan sensor berjalan.");
 }
 
-void loop()
-{
-  if (!client.connected())
-  {
-    reconnect();
-  }
-
-  client.loop();
-  delay(10);
-}
+void loop() {}
