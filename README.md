@@ -6,4 +6,4 @@
   NIM: 23552011278  
 
 - **Salsa Billa Syazwani**  
-  NIM: (isi NIM jika ada)
+  NIM: 23552011402
