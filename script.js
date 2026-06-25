@@ -5,7 +5,7 @@ let lastAnalysisTime = 0;
 const ANALYSIS_COOLDOWN = 10000;
 
 //MQTT Configuration
-const MQTT_BROKER_URL = 'wss://localhost:18083/mqtt'; // Ganti dengan URL broker MQTT Anda (pastikan mendukung WebSocket)
+const MQTT_BROKER_URL = 'wss://192.168.137.1:18083/mqtt'; // Ganti dengan URL broker MQTT Anda (pastikan mendukung WebSocket)
 const MQTT_OPTIONS = {
     clientId: 'heartmonitor_web_' + Math.random().toString(16).substr(2, 8),
     clean: true,
@@ -16,8 +16,8 @@ const MQTT_OPTIONS = {
 };
 
 const TOPIC_BPM = 'heart/bpm';
-const TOPIC_SPO2 = 'heart/spo2';
-const TOPIC_CONTROL = 'heart/control';
+const TOPIC_SPO2 = 'sensor/spo2';
+const TOPIC_CONTROL = 'sensor/control';
 
 // Variabel umum
 let mqttClient = null;
