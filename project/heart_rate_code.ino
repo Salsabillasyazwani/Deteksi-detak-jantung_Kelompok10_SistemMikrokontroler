@@ -2,6 +2,7 @@
 #include <PubSubClient.h>
 #include <Wire.h>
 #include "MAX30105.h"
+#include "spo2_algorithm.h"
 
 MAX30105 sensor;
 
@@ -12,7 +13,7 @@ bool sensorActive = true;
 #define BPM_HIGH 150
 
 // Buffer untuk menyimpan data IR dan SpO2
-#define BUFFER_SIZE 50
+#define BUFFER_SIZE 100
 
 long redBuffer[BUFFER_SIZE];
 
