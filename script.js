@@ -5,18 +5,18 @@ let lastAnalysisTime = 0;
 const ANALYSIS_COOLDOWN = 10000;
 
 //MQTT Configuration
-const MQTT_BROKER_URL = 'wss://broker.hivemq.com:8884/mqtt';
+const MQTT_BROKER_URL = 'wss://localhost:18083/mqtt'; // Ganti dengan URL broker MQTT Anda (pastikan mendukung WebSocket)
 const MQTT_OPTIONS = {
     clientId: 'heartmonitor_web_' + Math.random().toString(16).substr(2, 8),
     clean: true,
     connectTimeout: 5000,
-    reconnectPeriod: 3000
-    // username: 'USERNAME_BROKER',   
-    // password: 'PASSWORD_BROKER'
+    reconnectPeriod: 3000,
+    username: 'admin',
+    password: 'HengkerJahat@'
 };
 
-const TOPIC_BPM     = 'heart/bpm';
-const TOPIC_SPO2    = 'heart/spo2';
+const TOPIC_BPM = 'heart/bpm';
+const TOPIC_SPO2 = 'heart/spo2';
 const TOPIC_CONTROL = 'heart/control';
 
 // Variabel umum
@@ -30,7 +30,7 @@ let animationFrame = null;
 let lastBPM = 0;
 let lastSpO2 = 0;
 
-//  Data referensi kelompok usia 
+//  Data referensi kelompok usia
 const ageGroups = {
     bayi: {
         title: 'Bayi (0-1 tahun)',
@@ -94,7 +94,7 @@ const ageGroups = {
     }
 };
 
-// Inisialisasi grafik 
+// Inisialisasi grafik
 function initChart() {
     const ctx = document.getElementById('heartRateChart').getContext('2d');
     heartRateChart = new Chart(ctx, {
@@ -136,21 +136,21 @@ function initChart() {
     });
 }
 
-// Fungsi bantu 
+// Fungsi bantu
 function getNormalRange(age) {
-    if (age < 1)   return { min: 100, max: 160, group: 'bayi' };
-    if (age <= 10) return { min: 70,  max: 120, group: 'anak' };
-    if (age <= 17) return { min: 60,  max: 100, group: 'remaja' };
-    if (age <= 59) return { min: 60,  max: 100, group: 'dewasa' };
-    return             { min: 60,  max: 90,  group: 'lansia' };
+    if (age < 1) return { min: 100, max: 160, group: 'bayi' };
+    if (age <= 10) return { min: 70, max: 120, group: 'anak' };
+    if (age <= 17) return { min: 60, max: 100, group: 'remaja' };
+    if (age <= 59) return { min: 60, max: 100, group: 'dewasa' };
+    return { min: 60, max: 90, group: 'lansia' };
 }
 
-// BPM 
+// BPM
 function updateBPMDisplay(bpm, spo2 = null) {
-    const age   = parseInt(document.getElementById('ageInput').value) || 25;
+    const age = parseInt(document.getElementById('ageInput').value) || 25;
     const range = getNormalRange(age);
 
-    document.getElementById('bpmValue').textContent   = bpm;
+    document.getElementById('bpmValue').textContent = bpm;
     document.getElementById('normalRange').textContent = `Normal: ${range.min}-${range.max}`;
 
     // Posisi indikator pada bar gradient
@@ -171,12 +171,12 @@ function updateBPMDisplay(bpm, spo2 = null) {
     }
     const statusEl = document.getElementById('statusText');
     statusEl.textContent = status;
-    statusEl.className   = `text-center mt-3 text-lg font-medium ${statusClass}`;
+    statusEl.className = `text-center mt-3 text-lg font-medium ${statusClass}`;
 
     // SpO2
     if (spo2 !== null) {
-        document.getElementById('spo2Value').textContent    = spo2;
-        document.getElementById('spo2Bar').style.width      = `${spo2}%`;
+        document.getElementById('spo2Value').textContent = spo2;
+        document.getElementById('spo2Bar').style.width = `${spo2}%`;
     }
 
     // Animasi denyut ikon hati
@@ -244,7 +244,7 @@ async function generateAIAnalysis(bpm, spo2, age, range) {
 
     analysisDiv.innerHTML = baseHtml;
 
-    // Cooldown: skip panggilan AI jika terlalu sering 
+    // Cooldown: skip panggilan AI jika terlalu sering
     const now = Date.now();
     if (now - lastAnalysisTime < ANALYSIS_COOLDOWN) return;
     lastAnalysisTime = now;
@@ -298,22 +298,22 @@ Berikan analisis singkat (3-4 kalimat) dalam Bahasa Indonesia tentang kondisi in
     }
 }
 
-// Animasi ECG 
+// Animasi ECG
 function animateECG() {
-    const svg    = document.getElementById('ecgSvg');
-    const path   = document.getElementById('ecgPath');
-    const width  = svg.clientWidth;
+    const svg = document.getElementById('ecgSvg');
+    const path = document.getElementById('ecgPath');
+    const width = svg.clientWidth;
     const height = svg.clientHeight;
     const centerY = height / 2;
 
     let d = `M0,${centerY}`;
     const segmentWidth = 60;
-    const numSegments  = Math.ceil(width / segmentWidth) + 1;
+    const numSegments = Math.ceil(width / segmentWidth) + 1;
 
     for (let i = 0; i < numSegments; i++) {
-        const x          = i * segmentWidth;
-        const offset     = (Date.now() / 20) % segmentWidth;
-        const adjustedX  = x - offset;
+        const x = i * segmentWidth;
+        const offset = (Date.now() / 20) % segmentWidth;
+        const adjustedX = x - offset;
 
         d += ` L${adjustedX},${centerY}`;
         d += ` L${adjustedX + 10},${centerY}`;
@@ -330,17 +330,17 @@ function animateECG() {
     if (isRunning) animationFrame = requestAnimationFrame(animateECG);
 }
 
-// Suara 
+// Suara
 function playHeartbeat() {
-    const audioCtx   = new (window.AudioContext || window.webkitAudioContext)();
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const oscillator = audioCtx.createOscillator();
-    const gainNode   = audioCtx.createGain();
+    const gainNode = audioCtx.createGain();
 
     oscillator.connect(gainNode);
     gainNode.connect(audioCtx.destination);
 
     oscillator.frequency.value = 80;
-    oscillator.type            = 'sine';
+    oscillator.type = 'sine';
 
     gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
@@ -351,7 +351,7 @@ function playHeartbeat() {
 
 function toggleSound() {
     soundEnabled = !soundEnabled;
-    const btn  = document.getElementById('btnSound');
+    const btn = document.getElementById('btnSound');
     const icon = document.getElementById('soundIcon');
     const text = document.getElementById('soundText');
 
@@ -374,7 +374,7 @@ function toggleSound() {
     }
 }
 
-// MQTT Connection 
+// MQTT Connection
 function connectMQTT() {
     if (mqttClient) return; // sudah terhubung / sedang mencoba
 
@@ -450,26 +450,26 @@ function disconnectMQTT() {
 
 //MQTT/Connection -
 function setMQTTStatus(connected, label) {
-    const dot    = document.getElementById('connectionDot');
+    const dot = document.getElementById('connectionDot');
     const status = document.getElementById('connectionStatus');
-    const wsBox  = document.getElementById('wsStatus');
+    const wsBox = document.getElementById('wsStatus');
 
     if (connected) {
-        dot.style.background  = '#22c55e';
-        status.textContent    = label || 'Terhubung';
-        status.className      = 'text-green-400';
-        wsBox.innerHTML        = '<span class="w-2 h-2 bg-green-500 rounded-full"></span> Terhubung';
-        wsBox.className        = 'text-green-400 text-sm flex items-center gap-2';
+        dot.style.background = '#22c55e';
+        status.textContent = label || 'Terhubung';
+        status.className = 'text-green-400';
+        wsBox.innerHTML = '<span class="w-2 h-2 bg-green-500 rounded-full"></span> Terhubung';
+        wsBox.className = 'text-green-400 text-sm flex items-center gap-2';
     } else {
-        dot.style.background  = '#ef4444';
-        status.textContent    = label || 'Terputus';
-        status.className      = 'text-red-400';
-        wsBox.innerHTML        = '<span class="w-2 h-2 bg-red-500 rounded-full"></span> Terputus';
-        wsBox.className        = 'text-red-400 text-sm flex items-center gap-2';
+        dot.style.background = '#ef4444';
+        status.textContent = label || 'Terputus';
+        status.className = 'text-red-400';
+        wsBox.innerHTML = '<span class="w-2 h-2 bg-red-500 rounded-full"></span> Terputus';
+        wsBox.className = 'text-red-400 text-sm flex items-center gap-2';
     }
 }
 
-// Sensor Control 
+// Sensor Control
 function startSensor() {
     const age = document.getElementById('ageInput').value;
     if (!age || age < 0 || age > 120) {
@@ -479,10 +479,10 @@ function startSensor() {
 
     isRunning = true;
     document.getElementById('btnStart').disabled = true;
-    document.getElementById('btnStop').disabled  = false;
+    document.getElementById('btnStop').disabled = false;
 
-    document.getElementById('sensorStatus').innerHTML  = '<span class="w-2 h-2 bg-green-500 rounded-full"></span> Aktif';
-    document.getElementById('sensorStatus').className  = 'text-green-400 text-sm flex items-center gap-2';
+    document.getElementById('sensorStatus').innerHTML = '<span class="w-2 h-2 bg-green-500 rounded-full"></span> Aktif';
+    document.getElementById('sensorStatus').className = 'text-green-400 text-sm flex items-center gap-2';
 
     animateECG();
 
@@ -504,10 +504,10 @@ function startSensor() {
 function stopSensor() {
     isRunning = false;
     document.getElementById('btnStart').disabled = false;
-    document.getElementById('btnStop').disabled  = true;
+    document.getElementById('btnStop').disabled = true;
 
-    document.getElementById('sensorStatus').innerHTML  = '<span class="w-2 h-2 bg-gray-500 rounded-full"></span> Tidak aktif';
-    document.getElementById('sensorStatus').className  = 'text-gray-500 text-sm flex items-center gap-2';
+    document.getElementById('sensorStatus').innerHTML = '<span class="w-2 h-2 bg-gray-500 rounded-full"></span> Tidak aktif';
+    document.getElementById('sensorStatus').className = 'text-gray-500 text-sm flex items-center gap-2';
 
     if (animationFrame) cancelAnimationFrame(animationFrame);
 
@@ -524,15 +524,15 @@ function resetAll() {
     lastBPM = 0;
     lastSpO2 = 0;
 
-    document.getElementById('ageInput').value              = '';
-    document.getElementById('bpmValue').textContent        = '--';
-    document.getElementById('spo2Value').textContent       = '--';
-    document.getElementById('spo2Bar').style.width         = '0%';
-    document.getElementById('statusText').textContent      = 'Menunggu data...';
-    document.getElementById('statusText').className        = 'text-center mt-3 text-lg font-medium text-gray-400';
+    document.getElementById('ageInput').value = '';
+    document.getElementById('bpmValue').textContent = '--';
+    document.getElementById('spo2Value').textContent = '--';
+    document.getElementById('spo2Bar').style.width = '0%';
+    document.getElementById('statusText').textContent = 'Menunggu data...';
+    document.getElementById('statusText').className = 'text-center mt-3 text-lg font-medium text-gray-400';
     document.getElementById('bpmIndicator').style.marginLeft = '50%';
-    document.getElementById('lastUpdate').textContent      = '-';
-    document.getElementById('normalRange').textContent     = 'Normal: 60-100';
+    document.getElementById('lastUpdate').textContent = '-';
+    document.getElementById('normalRange').textContent = 'Normal: 60-100';
 
     document.getElementById('aiAnalysis').innerHTML = `
         <div class="flex items-center gap-3 text-gray-400">
@@ -547,11 +547,11 @@ function resetAll() {
     lastAnalysisTime = 0; // reset cooldown supaya analisis AI bisa langsung jalan lagi
 }
 
-//Modal 
+//Modal
 function showDetail(group) {
-    const data    = ageGroups[group];
-    const modal   = document.getElementById('detailModal');
-    const title   = document.getElementById('modalTitle');
+    const data = ageGroups[group];
+    const modal = document.getElementById('detailModal');
+    const title = document.getElementById('modalTitle');
     const content = document.getElementById('modalContent');
 
     title.textContent = data.title;

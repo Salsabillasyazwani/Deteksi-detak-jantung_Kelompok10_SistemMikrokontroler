@@ -2,8 +2,9 @@
 
 ## Anggota
 
-- **Raffly**  
-  NIM: 23552011278  
+- **Raffly**
+  NIM: 23552011278
 
-- **Salsa Billa Syazwani**  
+- **Salsa Billa Syazwani**
   NIM: 23552011402
+
