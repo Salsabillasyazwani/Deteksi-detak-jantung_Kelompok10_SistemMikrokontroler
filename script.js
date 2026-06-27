@@ -15,8 +15,8 @@ const MQTT_OPTIONS = {
     password: 'HengkerJahat@'
 };
 
-const TOPIC_BPM = 'heart/bpm';
-const TOPIC_SPO2 = 'sensor/spo2';
+const TOPIC_BPM = 'heart/data';
+const TOPIC_SPO2 = 'heart/status';
 const TOPIC_CONTROL = 'sensor/control';
 
 // Variabel umum
@@ -24,11 +24,11 @@ let mqttClient = null;
 let isRunning = false;
 let soundEnabled = false;
 let heartRateChart = null;
-let bpmHistory = [];
-let ecgData = [];
 let animationFrame = null;
 let lastBPM = 0;
 let lastSpO2 = 0;
+let lastAnalysisTime = 0;
+const ANALYSIS_COOLDOWN = 10000;
 
 //  Data referensi kelompok usia
 const ageGroups = {
@@ -146,11 +146,11 @@ function getNormalRange(age) {
 }
 
 // BPM
-function updateBPMDisplay(bpm, spo2 = null) {
+function updateBPMDisplay(bpm, spo2, finger = true) {
     const age = parseInt(document.getElementById('ageInput').value) || 25;
     const range = getNormalRange(age);
 
-    document.getElementById('bpmValue').textContent = bpm;
+    document.getElementById('bpmValue').textContent = bpm || '--';
     document.getElementById('normalRange').textContent = `Normal: ${range.min}-${range.max}`;
 
     // Posisi indikator pada bar gradient
@@ -159,7 +159,10 @@ function updateBPMDisplay(bpm, spo2 = null) {
 
     // status
     let status, statusClass;
-    if (bpm < range.min) {
+    if (!finger || !bpm) {
+        status = '👆 Letakkan jari pada sensor';
+        statusClass = 'text-gray-400';
+    } else if (bpm < range.min) {
         status = '⚠️ Detak Jantung RENDAH (Bradikardia)';
         statusClass = 'text-yellow-400';
     } else if (bpm > range.max) {
@@ -174,23 +177,21 @@ function updateBPMDisplay(bpm, spo2 = null) {
     statusEl.className = `text-center mt-3 text-lg font-medium ${statusClass}`;
 
     // SpO2
-    if (spo2 !== null) {
+    if (spo2) {
         document.getElementById('spo2Value').textContent = spo2;
         document.getElementById('spo2Bar').style.width = `${spo2}%`;
     }
 
     // Animasi denyut ikon hati
-    const heartIcon = document.getElementById('heartIcon');
-    heartIcon.classList.add('pulse-animation');
-    setTimeout(() => heartIcon.classList.remove('pulse-animation'), 500);
-
-    if (soundEnabled) playHeartbeat();
-
-    updateChart(bpm);
-
-    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('id-ID');
-
-    generateAIAnalysis(bpm, spo2, age, range);
+    if (bpm && finger) {
+        document.getElementById('heartIcon').classList.add('pulse-animation');
+        setTimeout(() => document.getElementById('heartIcon').classList.remove('pulse-animation'), 500);
+        if (soundEnabled) playHeartbeat();
+        updateChart(bpm);
+        document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('id-ID');
+        // Panggil AI (dengan cooldown)
+        generateAIAnalysis(bpm, spo2, age, range);
+    }
 }
 
 // grafik
@@ -376,43 +377,29 @@ function toggleSound() {
 
 // MQTT Connection
 function connectMQTT() {
-    if (mqttClient) return; // sudah terhubung / sedang mencoba
-
-    if (typeof mqtt === 'undefined') {
-        console.error('Library MQTT.js belum dimuat. Tambahkan <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script> di HTML.');
-        setMQTTStatus(false, 'Library MQTT tidak ditemukan');
-        return;
-    }
+    if (mqttClient && mqttClient.connected) return;
 
     setMQTTStatus(false, 'Menghubungkan...');
-
     mqttClient = mqtt.connect(MQTT_BROKER_URL, MQTT_OPTIONS);
 
     mqttClient.on('connect', function () {
-        console.log('MQTT terhubung ke', MQTT_BROKER_URL);
+        console.log('MQTT terhubung');
         setMQTTStatus(true, 'Terhubung');
-
-        mqttClient.subscribe([TOPIC_BPM, TOPIC_SPO2], function (err) {
-            if (err) {
-                console.error('Gagal subscribe topik:', err);
-            } else {
-                console.log(`Subscribed ke ${TOPIC_BPM} dan ${TOPIC_SPO2}`);
-            }
+        mqttClient.subscribe([TOPIC_DATA, TOPIC_STATUS], function (err) {
+            if (err) console.error('Gagal subscribe:', err);
+            else console.log('Subscribe ke', TOPIC_DATA, TOPIC_STATUS);
         });
-
-        // Jika monitoring sedang berjalan saat (re)connect, beri tahu perangkat
+        // Jika sensor sedang aktif, kirim START
         if (isRunning) {
             mqttClient.publish(TOPIC_CONTROL, 'START');
         }
     });
 
     mqttClient.on('reconnect', function () {
-        console.log('MQTT mencoba menghubungkan kembali...');
         setMQTTStatus(false, 'Menghubungkan kembali...');
     });
 
     mqttClient.on('close', function () {
-        console.log('Koneksi MQTT tertutup');
         setMQTTStatus(false, 'Terputus');
     });
 
@@ -423,19 +410,44 @@ function connectMQTT() {
 
     mqttClient.on('message', function (topic, message) {
         const payload = message.toString().trim();
-
-        if (topic === TOPIC_BPM) {
-            const bpm = parseFloat(payload);
-            if (!isNaN(bpm) && bpm > 0) {
-                lastBPM = bpm;
-                updateBPMDisplay(lastBPM, lastSpO2 > 0 ? lastSpO2 : null);
+        if (topic === TOPIC_DATA) {
+            try {
+                const data = JSON.parse(payload);
+                if (data.finger === false) {
+                    // Jari tidak terdeteksi
+                    document.getElementById('statusText').textContent = '👆 Letakkan jari pada sensor';
+                    document.getElementById('statusText').className = 'text-center mt-3 text-lg font-medium text-gray-400';
+                    // Kosongkan BPM/SpO2?
+                    document.getElementById('bpmValue').textContent = '--';
+                    document.getElementById('spo2Value').textContent = '--';
+                    document.getElementById('spo2Bar').style.width = '0%';
+                    return;
+                }
+                if (data.bpm && data.spo2) {
+                    lastBPM = data.bpm;
+                    lastSpO2 = data.spo2;
+                    updateBPMDisplay(lastBPM, lastSpO2, true);
+                }
+            } catch (e) {
+                console.warn('Gagal parse JSON:', payload);
             }
-        } else if (topic === TOPIC_SPO2) {
-            const spo2 = parseFloat(payload);
-            if (!isNaN(spo2) && spo2 > 0) {
-                lastSpO2 = spo2;
-                updateBPMDisplay(lastBPM > 0 ? lastBPM : 0, lastSpO2);
-            }
+        } else if (topic === TOPIC_STATUS) {
+            try {
+                const status = JSON.parse(payload);
+                if (status.status === 'stopped') {
+                    // Sensor berhenti dari ESP32
+                    if (isRunning) {
+                        // Matikan status running tapi jangan ubah tombol? Atau biarkan user stop manual
+                        // Kita sync: jika ESP32 mengirim stop, kita hentikan juga
+                        isRunning = false;
+                        document.getElementById('btnStart').disabled = false;
+                        document.getElementById('btnStop').disabled = true;
+                        document.getElementById('sensorStatus').innerHTML = '<span class="w-2 h-2 bg-gray-500 rounded-full"></span> Tidak aktif';
+                        document.getElementById('sensorStatus').className = 'text-gray-500 text-sm flex items-center gap-2';
+                        if (animationFrame) cancelAnimationFrame(animationFrame);
+                    }
+                }
+            } catch (e) { }
         }
     });
 }

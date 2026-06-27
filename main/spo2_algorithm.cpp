@@ -49,11 +49,12 @@ void maxim_heart_rate_and_oxygen_saturation(
 
   float ratio = (red_ac / red_mean) / (ir_ac / ir_mean);
 
-  float spo2_calc = 110 - 20 * ratio;
+  float spo2_calc = 104 - 17 * ratio;
 
   if (spo2_calc > 100)
     spo2_calc = 100;
   if (spo2_calc < 0)
+
     spo2_calc = 0;
 
   *spo2 = (int32_t)spo2_calc;

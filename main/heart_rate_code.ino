@@ -63,28 +63,6 @@ void callback(char *topic, byte *payload, unsigned int length)
   }
 }
 
-// ==== MQTT CONNECT ====
-void reconnect()
-{
-  while (!client.connected())
-  {
-    Serial.print("Menghubungkan ke MQTT...");
-
-    if (client.connect("ESP32Client"))
-    {
-      Serial.println("Terhubung");
-      client.subscribe("sensor/control");
-    }
-    else
-    {
-      Serial.print("Gagal, rc=");
-      Serial.print(client.state());
-      Serial.println(" Coba lagi dalam 2 detik");
-      delay(2000);
-    }
-  }
-}
-
 // ===== SMOOTHING =====
 long irBufferSmooth[5];
 int irIndex = 0;
@@ -138,20 +116,20 @@ void debugWiFi()
 // === TASK 1 SENSOR ===
 void taskSensor(void *pvParameters)
 {
-  static int loopCounter = 0;
-  loopCounter++;
-  if (loopCounter < 25)
-  {
-    vTaskDelay(40 / portTICK_PERIOD_MS);
-    continue;
-  }
-  loopCounter = 0;
-
   static int32_t lastSpo2 = -1;
   static int32_t lastHeartRate = -1;
 
   while (1)
   {
+    static int loopCounter = 0;
+    loopCounter++;
+    if (loopCounter < 25)
+    {
+      vTaskDelay(40 / portTICK_PERIOD_MS);
+      continue;
+    }
+    loopCounter = 0;
+
     // STOP TOTAL
     if (!sensorActive)
     {
@@ -167,12 +145,15 @@ void taskSensor(void *pvParameters)
       continue;
     }
 
-    uint32_t ir = sensor.getFIFOIR();
+    uint32_t ir = smoothIR(sensor.getFIFOIR());
     uint32_t red = sensor.getFIFORed();
     sensor.nextSample();
 
     // DETEKSI JARI
-    if (ir < 50000)
+    static uint32_t baselineIR = 0;
+
+    baselineIR = (baselineIR * 9 + ir) / 10; // Moving average untuk baseline IR
+    if (ir < baselineIR * 0.5)               // Threshold untuk deteksi jari
     {
       client.publish("heart/data", "{\"finger\":false}");
       bufferIndex = 0;
@@ -220,15 +201,20 @@ void taskSensor(void *pvParameters)
 
     char payload[150];
 
-    sprintf(payload,
-            "{\"bpm\":%d,\"spo2\":%d,\"valid_spo2\":%d,\"valid_hr\":%d,\"finger\":true}",
-            heartRate,
-            spo2,
-            spo2_valid,
-            hr_valid);
+    snprintf(payload,
+             "{\"bpm\":%d,\"spo2\":%d,\"valid_spo2\":%d,\"valid_hr\":%d,\"finger\":true}",
+             heartRate,
+             spo2,
+             spo2_valid,
+             hr_valid);
 
-    if (client.connected())
+    static unsigned long lastSend = 0;
+
+    if (millis() - lastSend > 1000)
+    {
       client.publish("heart/data", payload);
+      lastSend = millis();
+    }
 
     Serial.println(payload);
     vTaskDelay(40 / portTICK_PERIOD_MS);
@@ -242,7 +228,15 @@ void taskMQTT(void *pvParameters)
   {
     if (!client.connected())
     {
-      reconnect();
+      static unsigned long lastReconnectAttempt = 0;
+      if (millis() - lastReconnectAttempt > 2000)
+      {
+        if (client.connect("ESP32Client"))
+        {
+          client.subscribe("sensor/control");
+          lastReconnectAttempt = millis();
+        }
+      }
     }
     client.loop();
     vTaskDelay(10 / portTICK_PERIOD_MS);
@@ -267,7 +261,7 @@ void setup()
       60,   // brightness
       4,    // sample avg
       2,    // LED mode
-      100,  // sample rate
+      25,   // sample rate
       411,  // pulse width
       16384 // ADC range
   );        // Konfigurasi sensor
@@ -288,7 +282,12 @@ void setup()
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
 
-  reconnect();
+  while (!client.connected())
+  {
+    client.connect("ESP32Client");
+    delay(500);
+  }
+  client.subscribe("sensor/control");
 
   xTaskCreatePinnedToCore(taskSensor, "TaskSensor", 4096, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(taskMQTT, "TaskMQTT", 4096, NULL, 1, NULL, 0);
