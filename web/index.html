@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure IoT Oximeter - Real-time Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Premium Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for beautiful charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Local CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar / Header -->
+        <header class="app-header">
+            <div class="logo-section">
+                <div class="logo-icon">
+                    <i class="fa-solid fa-heart-pulse pulse-animation"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>Oximeter</h1>
+                    <span>Secure IoT Pulse Oximeter</span>
+                </div>
+            </div>
+
+            <!-- Status Koneksi -->
+            <div class="status-panel">
+                <div class="status-item" id="mqtt-status">
+                    <span class="status-dot disconnected"></span>
+                    <span class="status-label">MQTT Broker: Disconnected</span>
+                </div>
+                <div class="status-item" id="backend-status">
+                    <span class="status-dot disconnected"></span>
+                    <span class="status-label">Backend: Disconnected</span>
+                </div>
+                <div class="security-badge">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span>AES-256 SECURED</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Content -->
+        <main class="dashboard-grid">
+
+            <!-- Row 1: Metrics Cards -->
+            <section class="metrics-row">
+                <!-- Card 1: Heart Rate (BPM) -->
+                <div class="metric-card bpm-card">
+                    <div class="card-glow"></div>
+                    <div class="card-header">
+                        <h3>Detak Jantung</h3>
+                        <i class="fa-solid fa-heart heart-beat"></i>
+                    </div>
+                    <div class="card-body">
+                        <div class="metric-value">
+                            <span id="bpm-val">--</span>
+                            <span class="metric-unit">BPM</span>
+                        </div>
+                        <p class="metric-desc">Denyut nadi per menit</p>
+                    </div>
+                    <div class="card-footer normal" id="bpm-status-text">
+                        Menunggu data...
+                    </div>
+                </div>
+
+                <!-- Card 2: SpO2 -->
+                <div class="metric-card spo2-card">
+                    <div class="card-glow"></div>
+                    <div class="card-header">
+                        <h3>Saturasi Oksigen</h3>
+                        <i class="fa-solid fa-wind"></i>
+                    </div>
+                    <div class="card-body">
+                        <div class="metric-value">
+                            <span id="spo2-val">--</span>
+                            <span class="metric-unit">%</span>
+                        </div>
+                        <p class="metric-desc">Kadar oksigen dalam darah (SpO₂)</p>
+                    </div>
+                    <div class="card-footer normal" id="spo2-status-text">
+                        Menunggu data...
+                    </div>
+                </div>
+
+                <!-- Card 3: Finger Status & AES Info -->
+                <div class="metric-card status-card">
+                    <div class="card-glow"></div>
+                    <div class="card-header">
+                        <h3>Status Sensor</h3>
+                        <i class="fa-solid fa-fingerprint" id="finger-icon"></i>
+                    </div>
+                    <div class="card-body status-body">
+                        <div class="finger-status-indicator disconnected" id="finger-status">
+                            <i class="fa-solid fa-circle-info"></i>
+                            <span id="finger-status-text">Finger Out</span>
+                        </div>
+                        <div class="encryption-info">
+                            <div class="crypto-title">
+                                <i class="fa-solid fa-key"></i> Enkripsi Aktif
+                            </div>
+                            <p>Data dienkripsi di ESP32 menggunakan AES-256-CBC sebelum dipublish.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Row 2: Charts and Tables -->
+            <section class="data-row">
+                <!-- Chart Area -->
+                <div class="chart-container card-panel">
+                    <div class="panel-header">
+                        <h2><i class="fa-solid fa-chart-line"></i> Grafik Real-time</h2>
+                        <span class="chart-badge">Live</span>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="realtimeChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- History Table -->
+                <div class="history-container card-panel">
+                    <div class="panel-header">
+                        <h2><i class="fa-solid fa-history"></i> Riwayat Pengukuran</h2>
+                        <button id="refresh-history-btn" class="btn-refresh">
+                            <i class="fa-solid fa-arrows-rotate"></i> Refresh
+                        </button>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Waktu</th>
+                                    <th>BPM</th>
+                                    <th>SpO₂</th>
+                                    <th>Status Jari</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-table-body">
+                                <tr>
+                                    <td colspan="4" class="empty-table">Belum ada riwayat pengukuran.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="app-footer-bar">
+            <p>&copy; 2026 Oximeter Project. Dirancang untuk monitoring kesehatan aman.</p>
+        </footer>
+    </div>
+
+    <!-- MQTT WebSockets Library -->
+    <script src="mqtt.min.js"></script>
+    <!-- Custom Dashboard Logic -->
+    <script src="app.js"></script>
+</body>
+</html>
