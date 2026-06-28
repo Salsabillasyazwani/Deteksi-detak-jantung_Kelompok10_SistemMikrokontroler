@@ -8,6 +8,7 @@ MQTT_BROKER         = "localhost"
 MQTT_PORT           = 1883
 MQTT_RAW_TOPIC      = "oximeter/raw"
 MQTT_DECRYPTED_TOPIC = "oximeter/decrypted"
+MQTT_PULSE_TOPIC    = "oximeter/pulse"  # Topik untuk sync buzzer dengan grafik web
 
 # Inisialisasi client (paho-mqtt 1.x)
 client = mqtt.Client(client_id="oximeter_backend", clean_session=True)
@@ -48,6 +49,14 @@ def on_message(client, userdata, msg):
 
         # Publish data yang telah didekripsi untuk Web Dashboard
         client.publish(MQTT_DECRYPTED_TOPIC, json.dumps(data), qos=1)
+
+        # ===== SYNC BUZZER: Trigger pulse ke ESP32 =====
+        # Setiap kali ada data baru, kirim pulse trigger untuk sinkronisasi buzzer
+        if finger == 1 and bpm > 0:
+            # Jari terdeteksi dan BPM valid -> trigger buzzer
+            pulse_cmd = json.dumps({"action": "beep", "bpm": bpm})
+            client.publish(MQTT_PULSE_TOPIC, pulse_cmd, qos=1)
+            print(f"MQTT Client: Pulse trigger sent (BPM: {bpm})")
 
     except Exception as e:
         print(f"MQTT Client: Error memproses pesan -> {e}")

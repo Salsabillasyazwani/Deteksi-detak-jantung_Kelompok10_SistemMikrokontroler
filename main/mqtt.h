@@ -20,11 +20,22 @@ void loop_mqtt();
  * @param encrypted_payload String Base64 hasil enkripsi AES
  * @return true jika berhasil publish
  */
-bool mqtt_publish(const String& encrypted_payload);
+bool mqtt_publish(const String &encrypted_payload);
 
 /**
  * Mengembalikan true jika klien MQTT terhubung ke broker
  */
 bool is_mqtt_connected();
+
+/**
+ * Callback untuk menerima pulse trigger dari backend (untuk sinkronisasi buzzer)
+ * @param bpm BPM yang dikirim dari backend
+ */
+typedef void (*pulse_callback_t)(float bpm);
+
+/**
+ * Register callback handler untuk pulse trigger
+ */
+void mqtt_set_pulse_callback(pulse_callback_t callback);
 
 #endif // MQTT_H

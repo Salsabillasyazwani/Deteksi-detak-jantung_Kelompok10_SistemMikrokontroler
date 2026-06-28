@@ -31,6 +31,7 @@
 #include "mqtt.h"
 #include "sensor.h"
 #include "crypto.h"
+#include "led_buzzer.h"
 
 // Interval pengiriman data ke broker (dalam millisecond)
 const unsigned long PUBLISH_INTERVAL_MS = 2000;
@@ -39,7 +40,8 @@ static unsigned long lastPublishTime = 0;
 // ==========================================
 // SETUP
 // ==========================================
-void setup() {
+void setup()
+{
     Serial.begin(115200);
     delay(500);
 
@@ -51,13 +53,23 @@ void setup() {
     setup_wifi();
 
     // 2. Inisialisasi sensor MAX30102
-    if (!setup_sensor()) {
+    if (!setup_sensor())
+    {
         Serial.println("[MAIN] Sensor tidak ditemukan. Periksa wiring! Sistem berhenti.");
-        while (true) { delay(1000); } // Halt
+        while (true)
+        {
+            delay(1000);
+        } // Halt
     }
 
-    // 3. Setup MQTT client
+    // 3. Setup LED dan BUZZER
+    setup_led_buzzer();
+
+    // 4. Setup MQTT client
     setup_mqtt();
+
+    // 5. Register pulse callback untuk sinkronisasi buzzer dengan grafik web
+    mqtt_set_pulse_callback(buzzer_pulse_trigger);
 
     Serial.println("[MAIN] Sistem siap. Mulai monitoring...");
 }
@@ -65,7 +77,8 @@ void setup() {
 // ==========================================
 // LOOP UTAMA
 // ==========================================
-void loop() {
+void loop()
+{
     // Jaga koneksi Wi-Fi dan MQTT tetap aktif
     loop_wifi();
     loop_mqtt();
@@ -73,13 +86,17 @@ void loop() {
     // Baca data sensor secara non-blocking
     loop_sensor();
 
+    // Ambil data sensor terkini untuk LED/BUZZER
+    OximeterData data = get_sensor_data();
+
+    // Update LED dan BUZZER sesuai irama detak jantung
+    update_led_buzzer(data.bpm, data.fingerOn);
+
     // Kirim data secara berkala
     unsigned long now = millis();
-    if (now - lastPublishTime >= PUBLISH_INTERVAL_MS) {
+    if (now - lastPublishTime >= PUBLISH_INTERVAL_MS)
+    {
         lastPublishTime = now;
-
-        // Ambil data sensor terkini
-        OximeterData data = get_sensor_data();
 
         // Tampilkan di Serial Monitor untuk debugging
         Serial.printf("[MAIN] Jari: %s | BPM: %.1f | SpO2: %.1f%%\n",
@@ -90,8 +107,8 @@ void loop() {
         // Buat JSON payload
         // Contoh: {"bpm":75.5,"spo2":98.2,"finger":1}
         StaticJsonDocument<128> jsonDoc;
-        jsonDoc["bpm"]    = data.fingerOn && data.valid ? roundf(data.bpm * 10) / 10.0f : 0;
-        jsonDoc["spo2"]   = data.fingerOn && data.valid ? roundf(data.spo2 * 10) / 10.0f : 0;
+        jsonDoc["bpm"] = data.fingerOn && data.valid ? roundf(data.bpm * 10) / 10.0f : 0;
+        jsonDoc["spo2"] = data.fingerOn && data.valid ? roundf(data.spo2 * 10) / 10.0f : 0;
         jsonDoc["finger"] = data.fingerOn ? 1 : 0;
 
         String jsonString;
@@ -101,16 +118,22 @@ void loop() {
 
         // Enkripsi payload dengan AES-256-CBC
         String encryptedPayload;
-        if (aes_encrypt(jsonString, encryptedPayload)) {
+        if (aes_encrypt(jsonString, encryptedPayload))
+        {
             Serial.printf("[MAIN] Payload terenkripsi (Base64, %d byte)\n", encryptedPayload.length());
 
             // Publish ke MQTT broker jika terhubung
-            if (is_mqtt_connected()) {
+            if (is_mqtt_connected())
+            {
                 mqtt_publish(encryptedPayload);
-            } else {
+            }
+            else
+            {
                 Serial.println("[MAIN] MQTT tidak terhubung, data tidak dikirim.");
             }
-        } else {
+        }
+        else
+        {
             Serial.println("[MAIN] Gagal mengenkripsi data.");
         }
     }
