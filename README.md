@@ -35,7 +35,7 @@ Sistem **Secure IoT Pulse Oximeter** adalah perangkat pemantauan kesehatan jantu
 - **Detak Jantung (BPM)** - Beats Per Minute
 - **Saturasi Oksigen (SpO2)** - Oxygen Saturation
 
-Sistem ini menggunakan **ESP32 microcontroller** dengan sensor **MAX30102** untuk pembacaan data akurat. Semua data terenkripsi dengan **AES-256-CBC** dan dikirim via **MQTT Broker** ke backend server. Dashboard web memberikan visualisasi real-time dengan analisis AI menggunakan Google Gemini.
+Sistem ini menggunakan **ESP32 microcontroller** dengan sensor **MAX30102** untuk pembacaan data akurat. Semua data terenkripsi dengan **AES-256-CBC** dan dikirim via **MQTT Broker** ke backend server. Dashboard web memberikan visualisasi real-time dengan grafik.
 
 ### Keunggulan:
 ✅ **Enkripsi End-to-End** - Data terenkripsi AES-256
@@ -70,7 +70,6 @@ Sistem ini menggunakan **ESP32 microcontroller** dengan sensor **MAX30102** untu
 ### 📱 Dashboard Web
 - Grafik real-time BPM & SpO2
 - Status koneksi MQTT & Backend
-- AI Analysis powered by Google Gemini
 - Rekomendasi kesehatan berdasarkan usia
 - Deteksi abnormal (bradikardia/takikardia)
 
@@ -274,7 +273,7 @@ python app.py
 ## 💻 Teknologi yang Digunakan
 
 ### Hardware:
-- **Microcontroller:** ESP32 (Espressif)
+- **Microcontroller:** ESP32
 - **Sensor:** MAX30102 (Maxim Integrated)
 - **Communication:** Wi-Fi, MQTT
 - **Output:** LED, Buzzer
@@ -294,7 +293,6 @@ python app.py
 - **HTML/CSS/JavaScript** (Vanilla)
 - **Chart.js** untuk visualisasi grafik
 - **WebSocket MQTT** untuk real-time update
-- **Google Gemini API** untuk AI analysis
 
 ### DevOps:
 - **Docker** untuk containerisasi MQTT Broker (EMQX)
