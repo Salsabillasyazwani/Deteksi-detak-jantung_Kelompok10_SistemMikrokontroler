@@ -209,7 +209,7 @@ python app.py
 ```bash
 # Copy folder 'web' ke public directory:
 # - index.html
-# - script.js
+# - app.js
 # - style.css
 
 # Buka di browser: http://localhost:5000
@@ -329,7 +329,7 @@ Deteksi-detak-jantung_Kelompok10_SistemMikrokontroler/
 │
 ├── web/                         ← Dashboard Web
 │   ├── index.html               ← UI structure
-│   ├── script.js                ← Logic + MQTT client
+│   ├── app.js                ← Logic + MQTT client
 │   └── style.css                ← Styling (dark theme)
 │
 └── docker/                      ← Docker configuration
@@ -412,7 +412,7 @@ Solution:
 - Buka browser DevTools (F12) → Console
 - Cek error MQTT connection
 - Pastikan backend running (python app.py)
-- Cek URL MQTT broker di script.js
+- Cek URL MQTT broker di app.js
 ```
 
 ### ❌ BPM selalu 0
