@@ -1,0 +1,31 @@
+services:
+  emqx:
+    image: emqx/emqx-enterprise:6.2.1
+    container_name: emqx_broker
+    ports:
+      - "1883:1883" # MQTT TCP Port
+      - "8083:8083" # MQTT WebSocket Port
+      - "18083:18083" # EMQX Dashboard Port
+    environment:
+      # Izinkan koneksi anonymous untuk development
+      - EMQX_MQTT__ALLOW_ANONYMOUS=true
+      # Pastikan listener WebSocket aktif di port 8083
+      - EMQX_LISTENERS__WS__DEFAULT__BIND=0.0.0.0:8083
+      # Path WebSocket harus /mqtt agar cocok dengan MQTT.js di dashboard
+      - EMQX_LISTENERS__WS__DEFAULT__WEBSOCKET__MQTT_PATH=/mqtt
+      # Dashboard default credentials
+      - EMQX_DASHBOARD__DEFAULT_USERNAME=admin
+      - EMQX_DASHBOARD__DEFAULT_PASSWORD=Hengkerjahat@
+    volumes:
+      - emqx_data:/opt/emqx/data # Persistent data (auth, rules, dll)
+      - emqx_log:/opt/emqx/log # Persistent logs
+    restart: always
+    healthcheck:
+      test: [ "CMD", "emqx", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  emqx_data:
+  emqx_log:
