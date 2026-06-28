@@ -1,4 +1,5 @@
-# Kelompok 10 - Sistem Mikrokontroler (TIF-RP23CNSA)
+# Kelompok 10 - Sistem Mikrokontroler 
+## TIF RM-23 CNSA ##
 
 ## Anggota
 
